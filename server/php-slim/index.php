@@ -33,11 +33,11 @@ $app->get('/', function (Request $request, Response $response, array $args) {
 
 $app->get('/config', function (Request $request, Response $response, array $args) {
   $pub_key = getenv('STRIPE_PUBLISHABLE_KEY');
-  $price = \Stripe\Price::retrieve(getenv('PRICE'));
+
   return $response->withJson([
     'publicKey' => $pub_key,
-    'unitAmount' => $price['unit_amount'],
-    'currency' => $price['currency']
+    'unitAmount' => 2900,
+    'currency' => 'EUR'
   ]);
 });
 
@@ -45,7 +45,6 @@ $app->get('/config', function (Request $request, Response $response, array $args
 
 $app->get('/charge-card-off-session', function(Request $request, Response $response, array $args) {
     $customer_id = $request->getQueryParam("customerId");
-    $price = \Stripe\Price::retrieve(getenv('PRICE'));
 
     try {
 
@@ -59,8 +58,8 @@ $app->get('/charge-card-off-session', function(Request $request, Response $respo
         // If authentication is required or the card is declined, Stripe
         // will throw an error
         $payment_intent = \Stripe\PaymentIntent::create([
-            'amount' => $price['unit_amount'],
-            'currency' => $price['currency'],
+            'amount' => 2900,
+            'currency' => "EUR",
             'payment_method' => $payment_methods->data[0]->id,
             'customer' => $customer_id,
             'confirm' => true,
@@ -81,7 +80,6 @@ $app->get('/charge-card-off-session', function(Request $request, Response $respo
             // without asking your customers to re-enter their details
             return $response->withJson(array(
                 'error' => 'authentication_required',
-                'amount' => calculateOrderAmount(),
                 'card'=> $err->getError()->payment_method->card,
                 'paymentMethod' => $err->getError()->payment_method->id,
                 'clientSecret' => $err->getError()->payment_intent->client_secret
@@ -106,8 +104,8 @@ $app->get('/charge-card-off-session', function(Request $request, Response $respo
 
 $app->post('/create-checkout-session', function(Request $request, Response $response, array $args) {
   $domain_url = getenv('DOMAIN');
-  $price = getenv('PRICE');
   $body = json_decode($request->getBody());
+
   $quantity = $body->quantity;
 
   $customer = \Stripe\Customer::create([
@@ -129,7 +127,14 @@ $app->post('/create-checkout-session', function(Request $request, Response $resp
     'mode' => 'payment',
     'customer' => $customer->id,
     'line_items' => [[
-      'price' => $price,
+      'price_data' => [
+          'product_data' => [
+              'name' => 'Producto',
+              'images' => ['https://picsum.photos/280/320?random=1']
+          ],
+          'unit_amount_decimal' => 2900,
+          'currency' => 'EUR'
+      ],
       'quantity' => $quantity,
     ]]
   ]);
