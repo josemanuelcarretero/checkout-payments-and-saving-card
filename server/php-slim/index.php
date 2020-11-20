@@ -109,6 +109,7 @@ $app->post('/create-checkout-session', function(Request $request, Response $resp
   $quantity = $body->quantity;
 
   $customer = \Stripe\Customer::create([
+      'email' => 'client@server.com'
   ]);
 
     // Create new Checkout Session for the order
