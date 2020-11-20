@@ -57,9 +57,9 @@
     </div>
     <script>
       var urlParams = new URLSearchParams(window.location.search);
-      var sessionId = urlParams.get('session_id');
-      if (sessionId) {
-        fetch('/checkout-session?sessionId=' + sessionId)
+      var customerId = urlParams.get('customerId');
+      if (customerId) {
+        fetch('/charge-card-off-session?customerId=' + customerId)
           .then(function (result) {
             return result.json();
           })

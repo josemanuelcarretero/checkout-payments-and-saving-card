@@ -41,13 +41,67 @@ $app->get('/config', function (Request $request, Response $response, array $args
   ]);
 });
 
-// Fetch the Checkout Session to display the JSON result on the success page
-$app->get('/checkout-session', function (Request $request, Response $response, array $args) {
-  $id = $request->getQueryParams()['sessionId'];
-  $checkout_session = \Stripe\Checkout\Session::retrieve($id);
 
-  return $response->withJson($checkout_session);
+
+$app->get('/charge-card-off-session', function(Request $request, Response $response, array $args) {
+    $customer_id = $request->getQueryParam("customerId");
+    $price = \Stripe\Price::retrieve(getenv('PRICE'));
+
+    try {
+
+        // List the Customer's PaymentMethods to pick one to pay with
+        $payment_methods = \Stripe\PaymentMethod::all([
+            'customer' => $customer_id,
+            'type' => 'card'
+        ]);
+
+        // Create a PaymentIntent with the order amount, currency, and saved payment method ID
+        // If authentication is required or the card is declined, Stripe
+        // will throw an error
+        $payment_intent = \Stripe\PaymentIntent::create([
+            'amount' => $price['unit_amount'],
+            'currency' => $price['currency'],
+            'payment_method' => $payment_methods->data[0]->id,
+            'customer' => $customer_id,
+            'confirm' => true,
+            'off_session' => true
+        ]);
+
+        // Send public key and PaymentIntent details to client
+        return $response->withJson(array('succeeded' => true, 'clientSecret' => $payment_intent->client_secret));
+
+    } catch (\Stripe\Exception\CardException $err) {
+        $error_code = $err->getError()->code;
+
+        if($error_code == 'authentication_required') {
+            // Bring the customer back on-session to authenticate the purchase
+            // You can do this by sending an email or app notification to let them know
+            // the off-session purchase failed
+            // Use the PM ID and client_secret to authenticate the purchase
+            // without asking your customers to re-enter their details
+            return $response->withJson(array(
+                'error' => 'authentication_required',
+                'amount' => calculateOrderAmount(),
+                'card'=> $err->getError()->payment_method->card,
+                'paymentMethod' => $err->getError()->payment_method->id,
+                'clientSecret' => $err->getError()->payment_intent->client_secret
+            ));
+
+        } else if ($error_code && $err->getError()->payment_intent != null) {
+            // The card was declined for other reasons (e.g. insufficient funds)
+            // Bring the customer back on-session to ask them for a new payment method
+            return $response->withJson(array(
+                'error' => $error_code ,
+                'clientSecret' => $err->getError()->payment_intent->client_secret
+            ));
+        } else {
+            $logger = $this->get('logger');
+            $logger->info('Unknown error occurred');
+        }
+    }
+
 });
+
 
 
 $app->post('/create-checkout-session', function(Request $request, Response $response, array $args) {
@@ -56,7 +110,10 @@ $app->post('/create-checkout-session', function(Request $request, Response $resp
   $body = json_decode($request->getBody());
   $quantity = $body->quantity;
 
-  // Create new Checkout Session for the order
+  $customer = \Stripe\Customer::create([
+  ]);
+
+    // Create new Checkout Session for the order
   // Other optional params include:
   // [billing_address_collection] - to display billing address details on the page
   // [customer] - if you have an existing Stripe Customer ID
@@ -66,10 +123,11 @@ $app->post('/create-checkout-session', function(Request $request, Response $resp
 
   // ?session_id={CHECKOUT_SESSION_ID} means the redirect will have the session ID set as a query param
   $checkout_session = \Stripe\Checkout\Session::create([
-    'success_url' => $domain_url . '/success.html?session_id={CHECKOUT_SESSION_ID}',
+    'success_url' => $domain_url . '/success.html?customerId='.$customer->id,
     'cancel_url' => $domain_url . '/canceled.html',
     'payment_method_types' => ['card'],
     'mode' => 'payment',
+    'customer' => $customer->id,
     'line_items' => [[
       'price' => $price,
       'quantity' => $quantity,
