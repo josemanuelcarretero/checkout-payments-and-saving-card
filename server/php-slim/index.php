@@ -125,19 +125,8 @@ $app->post('/create-checkout-session', function(Request $request, Response $resp
     'success_url' => $domain_url . '/success.html?customerId='.$customer->id,
     'cancel_url' => $domain_url . '/canceled.html',
     'payment_method_types' => ['card'],
-    'mode' => 'payment',
-    'customer' => $customer->id,
-    'line_items' => [[
-      'price_data' => [
-          'product_data' => [
-              'name' => 'Producto',
-              'images' => ['https://picsum.photos/280/320?random=1']
-          ],
-          'unit_amount_decimal' => 2900,
-          'currency' => 'EUR'
-      ],
-      'quantity' => $quantity,
-    ]]
+    'mode' => 'setup',
+    'customer' => $customer->id
   ]);
 
   return $response->withJson(array('sessionId' => $checkout_session['id']));
